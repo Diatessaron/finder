@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,11 +20,6 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	//err := godotenv.Load(".env")
-	//if err != nil {
-	//	log.Fatalf("Error loading .env file")
-	//}
-
 	userEmail := req.QueryStringParameters["userEmail"]
 
 	result, err := db.GetItem(&dynamodb.GetItemInput{
@@ -61,9 +55,9 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			}
 		}
 
-		messageContent = "Recommend me 10 films, do not ask me questions, just generate film ideas.\nExclude the following films: " + strings.Join(excludedFilms, ", ") + ".\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"Her\",\n\"year\": 2013,\n\"genres\":[\"Sci-Fi\",\"Romance\"],\n\"directedBy\":\"Spike Jonze\",\n\"description\":\"this film is a unique and touching exploration of love and relationships in the age of technology. It tells the story of a lonely writer who develops an unlikely relationship with an artificially intelligent operating system\"\n}\n]"
+		messageContent = "Recommend me 5 films, do not ask me questions, just generate film ideas.\nExclude the following films: " + strings.Join(excludedFilms, ", ") + ".\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
 	} else {
-		messageContent = "Recommend me 10 films, do not ask me questions, just generate film ideas.\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"Her\",\n\"year\": 2013,\n\"genres\":[\"Sci-Fi\",\"Romance\"],\n\"directedBy\":\"Spike Jonze\",\n\"description\":\"this film is a unique and touching exploration of love and relationships in the age of technology. It tells the story of a lonely writer who develops an unlikely relationship with an artificially intelligent operating system\"\n}\n]"
+		messageContent = "Recommend me 5 films, do not ask me questions, just generate film ideas.\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
 	}
 
 	client := openai.NewClient(os.Getenv("OpenAIToken"))
@@ -93,25 +87,9 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}
 
 	content := resp.Choices[0].Message.Content
-	fmt.Println(content)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       content,
 	}, nil
-
-	//var movies []Movie
-	//err = json.Unmarshal([]byte(content), &movies)
-	//if err != nil {
-	//	log.Fatalf("Error parsing JSON: %s", err)
-	//}
-	//fmt.Println(movies)
 }
-
-//type Movie struct {
-//	Name        string   `json:"name"`
-//	Year        int      `json:"year"`
-//	Genres      []string `json:"genres"`
-//	DirectedBy  string   `json:"directedBy"`
-//	Description string   `json:"description"`
-//}

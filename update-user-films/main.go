@@ -44,16 +44,25 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			Body:       "Got error calling GetItem: " + err.Error(),
 		}, err
 	}
+	var resultLikedFilms []*dynamodb.AttributeValue
+	var resultUnlikedFilms []*dynamodb.AttributeValue
+	if result.Item == nil {
+		resultLikedFilms = userLikedFilm
+		resultUnlikedFilms = userUnlikedFilm
+	} else {
+		resultLikedFilms = append(userLikedFilm, result.Item["likedFilms"].L...)
+		resultUnlikedFilms = append(userUnlikedFilm, result.Item["unlikedFilms"].L...)
+	}
 
 	item := map[string]*dynamodb.AttributeValue{
 		"email": {
 			S: aws.String(userEmail),
 		},
 		"likedFilms": {
-			L: append(userLikedFilm, result.Item["likedFilms"].L...),
+			L: resultLikedFilms,
 		},
 		"unlikedFilms": {
-			L: append(userUnlikedFilm, result.Item["unlikedFilms"].L...),
+			L: resultUnlikedFilms,
 		},
 	}
 
