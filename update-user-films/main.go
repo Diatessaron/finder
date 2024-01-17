@@ -46,6 +46,8 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			Body:       "Got error calling GetItem: " + err.Error(),
 		}, err
 	}
+
+	//create or update user liked/unliked films
 	var resultLikedFilms []*dynamodb.AttributeValue
 	var resultUnlikedFilms []*dynamodb.AttributeValue
 	if result.Item == nil {

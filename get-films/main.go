@@ -16,6 +16,9 @@ import (
 
 var db = dynamodb.New(session.Must(session.NewSession()))
 
+var recommendationTemplateBeginning = "Recommend me 5 films, do not ask me questions, just generate film ideas."
+var recommendationTemplateJson = "\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
+
 func main() {
 	lambda.Start(handleRequest)
 }
@@ -31,7 +34,6 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			},
 		},
 	})
-
 	if err != nil {
 		log.Fatalf("Got error calling GetItem: %s", err)
 		return events.APIGatewayProxyResponse{
@@ -40,27 +42,9 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	var messageContent string
-	if result.Item != nil {
-		var excludedFilms []string
-		unlikedFilms := result.Item["unlikedFilms"]
-		likedFilms := result.Item["likedFilms"]
-		for _, v := range unlikedFilms.L {
-			if v.S != nil {
-				excludedFilms = append(excludedFilms, *v.S)
-			}
-		}
-		for _, v := range likedFilms.L {
-			if v.S != nil {
-				excludedFilms = append(excludedFilms, *v.S)
-			}
-		}
+	messageContent := constructMessageContent(result)
 
-		messageContent = "Recommend me 5 films, do not ask me questions, just generate film ideas.\nExclude the following films: " + strings.Join(excludedFilms, ", ") + ".\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
-	} else {
-		messageContent = "Recommend me 5 films, do not ask me questions, just generate film ideas.\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
-	}
-
+	//chatGpt request
 	client := openai.NewClient(os.Getenv("OpenAIToken"))
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
@@ -78,7 +62,6 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			},
 		},
 	)
-
 	if err != nil {
 		log.Fatalf("ChatCompletion error: %v\n", err)
 		return events.APIGatewayProxyResponse{
@@ -88,7 +71,6 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}
 
 	content := resp.Choices[0].Message.Content
-
 	return events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       content,
@@ -116,4 +98,39 @@ func getUserEmail(req events.APIGatewayProxyRequest) string {
 	}
 
 	return userEmail
+}
+
+func constructMessageContent(result *dynamodb.GetItemOutput) string {
+	var messageContent string
+	if result.Item != nil {
+		var excludedFilms []string
+		var unlikedFilms []string
+		var likedFilms []string
+		for _, v := range result.Item["unlikedFilms"].L {
+			if v.S != nil {
+				excludedFilms = append(excludedFilms, *v.S)
+				unlikedFilms = append(unlikedFilms, *v.S)
+			}
+		}
+		for _, v := range result.Item["likedFilms"].L {
+			if v.S != nil {
+				excludedFilms = append(excludedFilms, *v.S)
+				likedFilms = append(likedFilms, *v.S)
+			}
+		}
+
+		messageContent = recommendationTemplateBeginning
+		if len(likedFilms) > 0 {
+			messageContent = messageContent + "\nI like the following films: " + strings.Join(likedFilms, ", ") + "."
+		}
+		if len(unlikedFilms) > 0 {
+			messageContent = messageContent + "\nI do not like the following films: " + strings.Join(unlikedFilms, ", ") + "."
+		}
+
+		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ") + recommendationTemplateJson
+	} else {
+		messageContent = recommendationTemplateBeginning + recommendationTemplateJson
+	}
+
+	return messageContent
 }
