@@ -78,13 +78,29 @@ Body:
 
 ```
 
-5. Get films
+5. Resend confirmation code 
+POST https://cognito-idp.eu-north-1.amazonaws.com
+
+Headers:
+- Content-Type: application/x-amz-json-1.1
+- X-Amz-Target: AWSCognitoIdentityProviderService.ResendConfirmationCode
+
+Body:
+```
+{
+    "ClientId": "175ib75ecdr2tr9adg7oe6o94k",
+    "Username": username as email
+}
+
+```
+
+6. Get films
 GET https://j5szh4ivo1.execute-api.eu-north-1.amazonaws.com/default/get-films
 
 Headers:
 authorization: Bearer ${yourAccessToken}
 
-6. Update film
+7. Update film
 If you like or do not like recommended film.
 
 GET https://54zfj2agze.execute-api.eu-north-1.amazonaws.com/default/update-user-films?method=unlike&film=The Perfect Man
