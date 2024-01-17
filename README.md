@@ -17,7 +17,7 @@ Body:
     "Username":username,
     "UserAttributes": [
         {
-            "Name": "email",
+            "Name": "email", //"email" is a key, keep it
             "Value": email
         }
     ]

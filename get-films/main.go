@@ -14,7 +14,8 @@ import (
 	"strings"
 )
 
-var db = dynamodb.New(session.Must(session.NewSession()))
+var sess = session.Must(session.NewSession())
+var db = dynamodb.New(sess)
 
 var recommendationTemplateBeginning = "Recommend me 5 films, do not ask me questions, just generate film ideas."
 var recommendationTemplateJson = "\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
@@ -24,7 +25,10 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	userEmail := getUserEmail(req)
+	userEmail, err := getUserEmail(req)
+	if err != nil {
+		log.Fatalf("Got error calling getUserEmail: %s", err)
+	}
 
 	result, err := db.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("user_films"),
@@ -77,13 +81,11 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}, nil
 }
 
-func getUserEmail(req events.APIGatewayProxyRequest) string {
-	authHeader := req.Headers["Authorization"]
+func getUserEmail(req events.APIGatewayProxyRequest) (string, error) {
+	authHeader := req.Headers["authorization"]
 	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
 
-	sess := session.Must(session.NewSession())
 	svc := cognitoidentityprovider.New(sess)
-
 	input := &cognitoidentityprovider.GetUserInput{
 		AccessToken: aws.String(accessToken),
 	}
@@ -97,7 +99,7 @@ func getUserEmail(req events.APIGatewayProxyRequest) string {
 		}
 	}
 
-	return userEmail
+	return userEmail, nil
 }
 
 func constructMessageContent(result *dynamodb.GetItemOutput) string {
