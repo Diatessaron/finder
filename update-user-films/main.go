@@ -89,7 +89,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 }
 
 func getUserEmail(req events.APIGatewayProxyRequest) string {
-	authHeader := req.Headers["Authorization"]
+	authHeader := req.Headers["authorization"]
 	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
 
 	sess := session.Must(session.NewSession())
