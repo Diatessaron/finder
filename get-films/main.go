@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/sashabaranov/go-openai"
 	"log"
@@ -20,7 +21,7 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	userEmail := req.QueryStringParameters["userEmail"]
+	userEmail := getUserEmail(req)
 
 	result, err := db.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("user_films"),
@@ -92,4 +93,27 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		StatusCode: 200,
 		Body:       content,
 	}, nil
+}
+
+func getUserEmail(req events.APIGatewayProxyRequest) string {
+	authHeader := req.Headers["Authorization"]
+	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	sess := session.Must(session.NewSession())
+	svc := cognitoidentityprovider.New(sess)
+
+	input := &cognitoidentityprovider.GetUserInput{
+		AccessToken: aws.String(accessToken),
+	}
+
+	user, _ := svc.GetUser(input)
+	userEmail := ""
+	for _, attr := range user.UserAttributes {
+		if *attr.Name == "email" {
+			userEmail = *attr.Value
+			break
+		}
+	}
+
+	return userEmail
 }
