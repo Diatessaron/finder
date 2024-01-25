@@ -6,8 +6,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
 	"log"
 	"os"
@@ -25,16 +25,21 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	userEmail, err := getUserEmail(req)
+	userId, err := getUserIdAndVerify(req)
 	if err != nil {
-		log.Fatalf("Got error calling getUserEmail: %s", err)
+		id := req.QueryStringParameters["id"]
+		log.Fatalf("Provided user id is not correct, user id - %s", id)
+		return events.APIGatewayProxyResponse{
+			StatusCode: 400,
+			Body:       "Provided user id is not correct, user id - " + id,
+		}, err
 	}
 
 	result, err := db.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("user_films"),
 		Key: map[string]*dynamodb.AttributeValue{
-			"email": {
-				S: aws.String(userEmail),
+			"id": {
+				S: aws.String(userId),
 			},
 		},
 	})
@@ -81,25 +86,10 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}, nil
 }
 
-func getUserEmail(req events.APIGatewayProxyRequest) (string, error) {
-	authHeader := req.Headers["authorization"]
-	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+func getUserIdAndVerify(req events.APIGatewayProxyRequest) (string, error) {
+	userId, err := uuid.Parse(req.QueryStringParameters["id"])
 
-	svc := cognitoidentityprovider.New(sess)
-	input := &cognitoidentityprovider.GetUserInput{
-		AccessToken: aws.String(accessToken),
-	}
-
-	user, _ := svc.GetUser(input)
-	userEmail := ""
-	for _, attr := range user.UserAttributes {
-		if *attr.Name == "email" {
-			userEmail = *attr.Value
-			break
-		}
-	}
-
-	return userEmail, nil
+	return userId.String(), err
 }
 
 func constructMessageContent(result *dynamodb.GetItemOutput) string {

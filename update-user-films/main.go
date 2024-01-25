@@ -6,10 +6,9 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/google/uuid"
 	"log"
-	"strings"
 )
 
 var db = dynamodb.New(session.Must(session.NewSession()))
@@ -19,7 +18,16 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	userEmail := getUserEmail(req)
+	userId, err := getUserIdAndVerify(req)
+	if err != nil {
+		id := req.QueryStringParameters["id"]
+		log.Fatalf("Provided user id is not correct, user id - %s", id)
+		return events.APIGatewayProxyResponse{
+			StatusCode: 400,
+			Body:       "Provided user id is not correct, user id - " + id,
+		}, err
+	}
+
 	userLikedFilm := []*dynamodb.AttributeValue{}
 	userUnlikedFilm := []*dynamodb.AttributeValue{}
 
@@ -35,7 +43,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		TableName: aws.String("user_films"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"email": {
-				S: aws.String(userEmail),
+				S: aws.String(userId),
 			},
 		},
 	})
@@ -59,8 +67,8 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}
 
 	item := map[string]*dynamodb.AttributeValue{
-		"email": {
-			S: aws.String(userEmail),
+		"id": {
+			S: aws.String(userId),
 		},
 		"likedFilms": {
 			L: resultLikedFilms,
@@ -88,25 +96,8 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}, nil
 }
 
-func getUserEmail(req events.APIGatewayProxyRequest) string {
-	authHeader := req.Headers["authorization"]
-	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+func getUserIdAndVerify(req events.APIGatewayProxyRequest) (string, error) {
+	userId, err := uuid.Parse(req.QueryStringParameters["id"])
 
-	sess := session.Must(session.NewSession())
-	svc := cognitoidentityprovider.New(sess)
-
-	input := &cognitoidentityprovider.GetUserInput{
-		AccessToken: aws.String(accessToken),
-	}
-
-	user, _ := svc.GetUser(input)
-	userEmail := ""
-	for _, attr := range user.UserAttributes {
-		if *attr.Name == "email" {
-			userEmail = *attr.Value
-			break
-		}
-	}
-
-	return userEmail
+	return userId.String(), err
 }
