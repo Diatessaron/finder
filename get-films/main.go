@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	messageContent := constructMessageContent(result)
 
 	//chatGpt request
-	client := openai.NewClient("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")
+	client := openai.NewClient(os.Getenv("OpenAIToken"))
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
