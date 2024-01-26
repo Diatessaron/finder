@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"finder/tmdb"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
@@ -10,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
 	"log"
-	"os"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
 var recommendationTemplateBeginning = "Recommend me 5 films, do not ask me questions, just generate film ideas."
-var recommendationTemplateJson = "\nDo not write me anything except JSON. Give it to me in the following JSON format:\n[\n{\n\"name\": \"filmName\",\n\"year\": 2013,\n\"genres\":[\"genre1\",\"genre2\"],\n\"directedBy\":\"director\",\n\"description\":\"description\"\n}\n]"
+var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:\n[\n\"\"\n]"
 
 func main() {
 	lambda.Start(handleRequest)
@@ -54,7 +55,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	messageContent := constructMessageContent(result)
 
 	//chatGpt request
-	client := openai.NewClient(os.Getenv("OpenAIToken"))
+	client := openai.NewClient("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")
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
@@ -79,10 +80,29 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	content := resp.Choices[0].Message.Content
+	var filmRecommendations []string
+	err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &filmRecommendations)
+	if err != nil {
+		log.Println(resp.Choices[0].Message.Content)
+		log.Fatalf("Error while parsing ChatGPT response. Error message - %v", err)
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       "Error while parsing ChatGPT response: " + err.Error(),
+		}, err
+	}
+
+	films, err := tmdb.NormalizeFilms(filmRecommendations)
+	if err != nil {
+		log.Fatalf("Error while parsing ChatGPT response. Error message - %v", err)
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       "Error while normalizing films. Error - " + err.Error(),
+		}, err
+	}
+
 	return events.APIGatewayProxyResponse{
 		StatusCode: 200,
-		Body:       content,
+		Body:       films,
 	}, nil
 }
 
@@ -119,9 +139,9 @@ func constructMessageContent(result *dynamodb.GetItemOutput) string {
 			messageContent = messageContent + "\nI do not like the following films: " + strings.Join(unlikedFilms, ", ") + "."
 		}
 
-		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ") + recommendationTemplateJson
+		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ") + recommendationTemplateEnding
 	} else {
-		messageContent = recommendationTemplateBeginning + recommendationTemplateJson
+		messageContent = recommendationTemplateBeginning + recommendationTemplateEnding
 	}
 
 	return messageContent
