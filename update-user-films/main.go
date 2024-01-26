@@ -42,7 +42,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	result, err := db.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("user_films"),
 		Key: map[string]*dynamodb.AttributeValue{
-			"email": {
+			"id": {
 				S: aws.String(userId),
 			},
 		},
