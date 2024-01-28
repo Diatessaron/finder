@@ -37,6 +37,7 @@ Query params:
 - id=0165fb5f-9341-44fd-99b2-9828be80488f - string type, must be UUID v4
 - page=1 - optional - int, number of the page
 - size=2 - optional - int, number of the entries per page
+- sort=ASC - optional - string, way of sorting. Example: 'ASC', 'DESC'
 
 5. Clear state films
 To clear all liked and unliked films, to clear user recommendations

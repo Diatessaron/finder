@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/google/uuid"
 	"log"
+	"slices"
+	"sort"
 	"strconv"
 )
 
@@ -69,6 +71,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}
 
 	likedFilms := paginateFilms(result.Item["likedFilms"].L, page, size)
+	likedFilms = sortFilms(likedFilms, req.QueryStringParameters["sort"])
 	pageableResult := PageableResult{
 		Page:       page,
 		TotalCount: totalCount,
@@ -121,4 +124,20 @@ func paginateFilms(likedFilms []*dynamodb.AttributeValue, page int, size int) []
 	}
 
 	return paginated
+}
+
+func sortFilms(likedFilms []string, sortWay string) []string {
+	if sortWay == "" {
+		return likedFilms
+	}
+
+	if sortWay == "ASC" {
+		slices.Sort(likedFilms)
+	} else if sortWay == "DESC" {
+		sort.Slice(likedFilms, func(i, j int) bool {
+			return likedFilms[i] > likedFilms[j]
+		})
+	}
+
+	return likedFilms
 }
