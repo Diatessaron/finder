@@ -141,23 +141,17 @@ func getImages(movieId int) (MovieImages, error) {
 	}
 
 	for index, image := range response.Posters {
-		if index == 2 {
+		if index == 4 {
+			response.Posters = response.Posters[0:4]
 			break
 		}
 
 		image.FilePath = imagePrefix + image.FilePath
 		response.Posters[index] = image
 	}
-	for index, image := range response.Logos {
-		if index == 2 {
-			break
-		}
-
-		image.FilePath = imagePrefix + image.FilePath
-		response.Logos[index] = image
-	}
 	for index, image := range response.Backdrops {
-		if index == 2 {
+		if index == 4 {
+			response.Backdrops = response.Backdrops[0:4]
 			break
 		}
 
@@ -226,17 +220,10 @@ type Person struct {
 }
 
 type Image struct {
-	AspectRatio float64 `json:"aspect_ratio"`
-	Height      int     `json:"height"`
-	ISO639_1    *string `json:"iso_639_1"` // Using a pointer to handle null values
-	FilePath    string  `json:"file_path"`
-	VoteAverage float64 `json:"vote_average"`
-	VoteCount   int     `json:"vote_count"`
-	Width       int     `json:"width"`
+	FilePath string `json:"file_path"`
 }
 
 type MovieImages struct {
 	Backdrops []Image `json:"backdrops"`
-	Logos     []Image `json:"logos"`
 	Posters   []Image `json:"posters"`
 }
