@@ -32,7 +32,7 @@ func NormalizeFilms(recommendedFilms []string) (string, error) {
 			return "", err
 		}
 
-		directorName, err := searchForDirector(movieId)
+		directors, err := searchForDirector(movieId)
 		if err != nil {
 			return "", err
 		}
@@ -42,7 +42,7 @@ func NormalizeFilms(recommendedFilms []string) (string, error) {
 			return "", err
 		}
 
-		normalizedFilms = constructFilmAndAppend(movieDetails, normalizedFilms, recommendedFilm, directorName, images)
+		normalizedFilms = constructFilmAndAppend(movieDetails, normalizedFilms, recommendedFilm, directors, images)
 	}
 
 	bytes, err := json.Marshal(normalizedFilms)
@@ -95,7 +95,7 @@ func searchForMovie(recommendedFilm string) (int, error) {
 	return response.Results[0].ID, nil
 }
 
-func searchForDirector(movieId int) (string, error) {
+func searchForDirector(movieId int) ([]string, error) {
 	req, _ := http.NewRequest("GET", strings.ReplaceAll(movieDirectorSearchUrl, "{movie_id}", fmt.Sprint(movieId)), nil)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+tmdbToken)
@@ -104,22 +104,27 @@ func searchForDirector(movieId int) (string, error) {
 	defer res.Body.Close()
 	byteResponse, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", err
+		return make([]string, 0), err
 	}
 
 	var response MovieDetail
 	err = json.Unmarshal(byteResponse, &response)
 	if err != nil {
-		return "", err
+		return make([]string, 0), err
 	}
 
+	directors := make([]string, 2)
 	for _, director := range response.Crew {
 		if director.KnownForDepartment == "Directing" {
-			return director.Name, nil
+			directors = append(directors, director.Name)
 		}
 	}
 
-	return "", errors.New("Film director not found. Response crew - " + string(byteResponse))
+	if len(directors) == 0 {
+		return make([]string, 0), errors.New("Film director not found. Response crew - " + string(byteResponse))
+	} else {
+		return directors, nil
+	}
 }
 
 func getImages(movieId int) (MovieImages, error) {
@@ -162,7 +167,7 @@ func getImages(movieId int) (MovieImages, error) {
 	return response, nil
 }
 
-func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm string, directorName string, images MovieImages) []ResultRecommendedFilm {
+func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm string, directors []string, images MovieImages) []ResultRecommendedFilm {
 	var genreNames []string
 
 	for _, genre := range movieDetails.Genres {
@@ -173,7 +178,7 @@ func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommen
 		recommendedFilm,
 		movieDetails.ReleaseDate[0:4],
 		genreNames,
-		directorName,
+		directors,
 		movieDetails.Overview,
 		images,
 	})
@@ -205,7 +210,7 @@ type ResultRecommendedFilm struct {
 	Name        string      `json:"name"`
 	Year        string      `json:"year"`
 	Genres      []string    `json:"genres"`
-	DirectedBy  string      `json:"directedBy"`
+	DirectedBy  []string    `json:"directedBy"`
 	Description string      `json:"description"`
 	MovieImages MovieImages `json:"movieImages"`
 }
