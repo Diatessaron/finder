@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var movieSearchUrl = "https://api.themoviedb.org/3/search/movie?query={query}&include_adult=true&page=1&language=en-US"
+var movieSearchUrl = "https://api.themoviedb.org/3/search/movie?query={query}&include_adult=true&page=1&language=en-US&year={year}"
 var movieImageUrl = "https://api.themoviedb.org/3/movie/{movieId}/images"
 var movieDirectorSearchUrl = "https://api.themoviedb.org/3/movie/{movie_id}/credits"
 var movieDetailsSearchUrl = "https://api.themoviedb.org/3/movie/{movie_id}"
@@ -18,7 +18,7 @@ var imagePrefix = "https://image.tmdb.org/t/p/w500"
 
 var tmdbToken = os.Getenv("TMDBReadToken")
 
-func NormalizeFilms(recommendedFilms []string) (string, error) {
+func NormalizeFilms(recommendedFilms []FilmRecommendation) (string, error) {
 	var normalizedFilms []ResultRecommendedFilm
 
 	for _, recommendedFilm := range recommendedFilms {
@@ -70,8 +70,8 @@ func searchForMovieDetails(movieId int) (Movie, error) {
 	return movie, nil
 }
 
-func searchForMovie(recommendedFilm string) (int, error) {
-	url := strings.ReplaceAll(strings.ReplaceAll(movieSearchUrl, "{query}", recommendedFilm), " ", "%20")
+func searchForMovie(recommendedFilm FilmRecommendation) (int, error) {
+	url := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(movieSearchUrl, "{query}", recommendedFilm.FilmName), " ", "%20"), "{year}", fmt.Sprint(recommendedFilm.Year))
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+tmdbToken)
@@ -113,9 +113,9 @@ func searchForDirector(movieId int) ([]string, error) {
 		return make([]string, 0), err
 	}
 
-	directors := make([]string, 2)
+	directors := make([]string, 0)
 	for _, director := range response.Crew {
-		if director.KnownForDepartment == "Directing" {
+		if director.Job == "Director" {
 			directors = append(directors, director.Name)
 		}
 	}
@@ -167,7 +167,7 @@ func getImages(movieId int) (MovieImages, error) {
 	return response, nil
 }
 
-func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm string, directors []string, images MovieImages) []ResultRecommendedFilm {
+func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm FilmRecommendation, directors []string, images MovieImages) []ResultRecommendedFilm {
 	var genreNames []string
 
 	for _, genre := range movieDetails.Genres {
@@ -175,8 +175,8 @@ func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommen
 	}
 
 	return append(normalizedFilms, ResultRecommendedFilm{
-		recommendedFilm,
-		movieDetails.ReleaseDate[0:4],
+		recommendedFilm.FilmName,
+		fmt.Sprint(recommendedFilm.Year),
 		genreNames,
 		directors,
 		movieDetails.Overview,
@@ -220,8 +220,8 @@ type MovieDetail struct {
 }
 
 type Person struct {
-	Name               string `json:"name"`
-	KnownForDepartment string `json:"known_for_department""`
+	Name string `json:"name"`
+	Job  string `json:"job"`
 }
 
 type Image struct {
@@ -231,4 +231,9 @@ type Image struct {
 type MovieImages struct {
 	Backdrops []Image `json:"backdrops"`
 	Posters   []Image `json:"posters"`
+}
+
+type FilmRecommendation struct {
+	FilmName string `json:"filmName"`
+	Year     int    `json:"year"`
 }

@@ -20,7 +20,7 @@ var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
 var recommendationTemplateBeginning = "Recommend me 5 films, do not ask me questions, just generate film ideas."
-var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:\n[\n\"\"\n]"
+var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:[{filmName: \"filmName\", year:1999}]"
 
 func main() {
 	lambda.Start(handleRequest)
@@ -81,7 +81,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	var filmRecommendations []string
+	var filmRecommendations []tmdb.FilmRecommendation
 	err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &filmRecommendations)
 	if err != nil {
 		log.Println(resp.Choices[0].Message.Content)
