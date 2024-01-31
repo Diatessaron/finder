@@ -176,7 +176,7 @@ func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommen
 
 	return append(normalizedFilms, ResultRecommendedFilm{
 		recommendedFilm.FilmName,
-		fmt.Sprint(recommendedFilm.Year),
+		recommendedFilm.Year,
 		genreNames,
 		directors,
 		movieDetails.Overview,
@@ -235,5 +235,5 @@ type MovieImages struct {
 
 type FilmRecommendation struct {
 	FilmName string `json:"filmName"`
-	Year     int    `json:"year"`
+	Year     string `json:"year"`
 }
