@@ -19,7 +19,7 @@ import (
 var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
-var recommendationTemplateBeginning = "Recommend me 5 films, do not ask me questions, just generate film ideas."
+var recommendationTemplateBeginning = "Recommend me {filmCount} films, do not ask me questions, just generate film ideas."
 var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:[{filmName: \"filmName\", year:\"1999\"}]"
 
 func main() {
@@ -27,6 +27,7 @@ func main() {
 }
 
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	filmCount := getFilmCount(req)
 	userId, err := getUserIdAndVerify(req)
 	if err != nil {
 		id := req.QueryStringParameters["id"]
@@ -53,7 +54,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	messageContent := constructMessageContent(result)
+	messageContent := constructMessageContent(result, filmCount)
 
 	//chatGpt request
 	client := openai.NewClient(os.Getenv("OpenAIToken"))
@@ -113,7 +114,16 @@ func getUserIdAndVerify(req events.APIGatewayProxyRequest) (string, error) {
 	return userId.String(), err
 }
 
-func constructMessageContent(result *dynamodb.GetItemOutput) string {
+func getFilmCount(req events.APIGatewayProxyRequest) string {
+	filmCount := req.QueryStringParameters["filmCount"]
+	if filmCount == "" {
+		return "5"
+	}
+
+	return filmCount
+}
+
+func constructMessageContent(result *dynamodb.GetItemOutput, filmCount string) string {
 	var messageContent string
 	if result.Item != nil {
 		var excludedFilms []string
@@ -145,5 +155,5 @@ func constructMessageContent(result *dynamodb.GetItemOutput) string {
 		messageContent = recommendationTemplateBeginning + recommendationTemplateEnding
 	}
 
-	return messageContent
+	return strings.ReplaceAll(messageContent, "{filmCount}", filmCount)
 }
