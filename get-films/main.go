@@ -30,6 +30,7 @@ func main() {
 func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	filmCount := getFilmCount(req)
 	userId, err := getUserIdAndVerify(req)
+	filmsToExclude := req.MultiValueQueryStringParameters["filmsToExclude"]
 	if err != nil {
 		id := req.QueryStringParameters["id"]
 		log.Fatalf("Provided user id is not correct, user id - %s", id)
@@ -55,7 +56,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	messageContent := constructMessageContent(result, filmCount)
+	messageContent := constructMessageContent(result, filmCount, filmsToExclude)
 
 	//chatGpt request
 	client := openai.NewClient(os.Getenv("OpenAIToken"))
@@ -129,10 +130,10 @@ func getFilmCount(req events.APIGatewayProxyRequest) string {
 	return filmCount
 }
 
-func constructMessageContent(result *dynamodb.GetItemOutput, filmCount string) string {
+func constructMessageContent(result *dynamodb.GetItemOutput, filmCount string, filmsToExclude []string) string {
 	var messageContent string
 	if result.Item != nil {
-		var excludedFilms []string
+		excludedFilms := filmsToExclude
 		var unlikedFilms []string
 		var likedFilms []string
 		for _, v := range result.Item["unlikedFilms"].L {

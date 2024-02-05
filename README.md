@@ -9,6 +9,7 @@ GET https://j5szh4ivo1.execute-api.eu-north-1.amazonaws.com/default/get-films
 Query parameters:
 - id=0165fb5f-9341-44fd-99b2-9828be80488f - string type, must be UUID v4
 - filmCount=1 - optional - string type, count of films to recommend
+- filmsToExclude="The Dark Knight","Goodfellas","Interstellar" - optional - array of strings, as enumeration. Films to exclude from recommendation if you need it
 
 2. Update film
 If you like or do not like recommended film.
