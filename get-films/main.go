@@ -20,7 +20,7 @@ import (
 var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
-var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film, do not ask me questions, just generate film ideas, write only film names."
+var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film, do not ask me questions, just generate film ideas, write only film names.."
 var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:\n[\n\"\"\n]"
 
 func main() {
