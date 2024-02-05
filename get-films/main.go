@@ -83,7 +83,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	var filmRecommendations []tmdb.FilmRecommendation
+	var filmRecommendations []string
 	err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &filmRecommendations)
 	if err != nil {
 		log.Println(resp.Choices[0].Message.Content)
