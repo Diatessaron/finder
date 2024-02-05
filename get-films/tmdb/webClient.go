@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ var imagePrefix = "https://image.tmdb.org/t/p/w500"
 
 var tmdbToken = os.Getenv("TMDBReadToken")
 
-func NormalizeFilms(recommendedFilms []FilmRecommendation) (string, error) {
+func NormalizeFilms(recommendedFilms []string) (string, error) {
 	var normalizedFilms []ResultRecommendedFilm
 
 	for _, recommendedFilm := range recommendedFilms {
@@ -70,8 +71,8 @@ func searchForMovieDetails(movieId int) (Movie, error) {
 	return movie, nil
 }
 
-func searchForMovie(recommendedFilm FilmRecommendation) (int, error) {
-	url := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(movieSearchUrl, "{query}", recommendedFilm.FilmName), " ", "%20"), "{year}", fmt.Sprint(recommendedFilm.Year))
+func searchForMovie(recommendedFilm string) (int, error) {
+	url := strings.ReplaceAll(strings.ReplaceAll(movieSearchUrl, "{query}", recommendedFilm), " ", "%20")
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+tmdbToken)
@@ -92,7 +93,23 @@ func searchForMovie(recommendedFilm FilmRecommendation) (int, error) {
 		return 0, errors.New(fmt.Sprintf("Response results is empty. Recommended film - %s. Response results - %v", recommendedFilm, response.Results))
 	}
 
-	return response.Results[0].ID, nil
+	filteredFilms := filterResponseResultByName(response.Results, response.Results[0].Title)
+	sort.Slice(filteredFilms, func(i, j int) bool {
+		return filteredFilms[i].Popularity > filteredFilms[j].Popularity
+	})
+
+	return filteredFilms[0].ID, nil
+}
+
+func filterResponseResultByName(results []movieIdResponse, filmName string) []movieIdResponse {
+	var filteredFilms []movieIdResponse
+	for _, movie := range results {
+		if movie.Title == filmName {
+			filteredFilms = append(filteredFilms, movie)
+		}
+	}
+
+	return filteredFilms
 }
 
 func searchForDirector(movieId int) ([]string, error) {
@@ -167,7 +184,7 @@ func getImages(movieId int) (MovieImages, error) {
 	return response, nil
 }
 
-func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm FilmRecommendation, directors []string, images MovieImages) []ResultRecommendedFilm {
+func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommendedFilm, recommendedFilm string, directors []string, images MovieImages) []ResultRecommendedFilm {
 	var genreNames []string
 
 	for _, genre := range movieDetails.Genres {
@@ -175,8 +192,8 @@ func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommen
 	}
 
 	return append(normalizedFilms, ResultRecommendedFilm{
-		recommendedFilm.FilmName,
-		recommendedFilm.Year,
+		recommendedFilm,
+		movieDetails.ReleaseDate[0:4],
 		genreNames,
 		directors,
 		movieDetails.Overview,
@@ -185,7 +202,9 @@ func constructFilmAndAppend(movieDetails Movie, normalizedFilms []ResultRecommen
 }
 
 type movieIdResponse struct {
-	ID int `json:"id"`
+	ID         int     `json:"id"`
+	Title      string  `json:"title"`
+	Popularity float64 `json:"popularity"`
 }
 
 type searchForMovieResponse struct {
