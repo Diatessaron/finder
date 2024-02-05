@@ -13,14 +13,15 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
 var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
-var recommendationTemplateBeginning = "Recommend me {filmCount} films, do not ask me questions, just generate film ideas."
-var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:[{filmName: \"filmName\", year:\"1999\"}]"
+var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film, do not ask me questions, just generate film ideas, write only film names."
+var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:\n[\n\"\"\n]"
 
 func main() {
 	lambda.Start(handleRequest)
@@ -117,6 +118,11 @@ func getUserIdAndVerify(req events.APIGatewayProxyRequest) (string, error) {
 func getFilmCount(req events.APIGatewayProxyRequest) string {
 	filmCount := req.QueryStringParameters["filmCount"]
 	if filmCount == "" {
+		return "5"
+	}
+
+	filmCountInt, err := strconv.Atoi(filmCount)
+	if filmCountInt <= 0 || err != nil {
 		return "5"
 	}
 
