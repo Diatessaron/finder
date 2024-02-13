@@ -94,6 +94,7 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			Body:       "Error while parsing ChatGPT response: " + err.Error(),
 		}, err
 	}
+	log.Printf("Film recommendations: %v\n", filmRecommendations)
 
 	films, err := tmdb.NormalizeFilms(filmRecommendations)
 	if err != nil {
