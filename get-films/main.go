@@ -20,8 +20,7 @@ import (
 var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
-var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film, do not ask me questions, just generate film ideas, write only film names."
-var recommendationTemplateEnding = "\nDo not write me anything except JSON, do not use indices. Give it to me as array of strings.Example:\n[\n\"\"\n]"
+var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film."
 
 func main() {
 	lambda.Start(handleRequest)
@@ -57,17 +56,21 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	}
 
 	messageContent := constructMessageContent(result, filmCount, filmsToExclude)
+	log.Printf("Prompt, message content to ChatGPT - %s", messageContent)
 
 	//chatGpt request
 	client := openai.NewClient(os.Getenv("OpenAIToken"))
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo,
+			ResponseFormat: &openai.ChatCompletionResponseFormat{
+				Type: openai.ChatCompletionResponseFormatTypeJSONObject,
+			},
+			Model: openai.GPT4,
 			Messages: []openai.ChatCompletionMessage{
 				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: "You are an experienced cinema critique.",
+					Role:    openai.ChatMessageRoleAssistant,
+					Content: "You are an expert in film recommendations and an experienced cinema critique. You recommend films, do not ask questions, just generate film ideas, write only film names. I give you films I like and films I do not like. Also I give you films I do not want to see in your film recommendation list. Based on this, you will generate me film ideas.",
 				},
 				{
 					Role:    openai.ChatMessageRoleUser,
@@ -158,9 +161,9 @@ func constructMessageContent(result *dynamodb.GetItemOutput, filmCount string, f
 			messageContent = messageContent + "\nI do not like the following films: " + strings.Join(unlikedFilms, ", ") + "."
 		}
 
-		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ") + recommendationTemplateEnding
+		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ")
 	} else {
-		messageContent = recommendationTemplateBeginning + recommendationTemplateEnding
+		messageContent = recommendationTemplateBeginning
 	}
 
 	return strings.ReplaceAll(messageContent, "{filmCount}", filmCount)
