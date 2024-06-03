@@ -1,5 +1,7 @@
 Tinder for films. Simple: it recommends you films and either you like or you don't.
 
+User Interface kindly made by my firend [Rifat Yarullin] (https://www.linkedin.com/in/rifat-yarullin-74a227205/) - https://yarulliin.github.io/finder/
+
 Endpoints:
 1. Get films
 To get recommended films
