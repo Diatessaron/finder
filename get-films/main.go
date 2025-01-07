@@ -21,6 +21,7 @@ var sess = session.Must(session.NewSession())
 var db = dynamodb.New(sess)
 
 var recommendationTemplateBeginning = "Recommend me exactly {filmCount} film."
+var recommendationTemplateEnding = "\nDo not include mentioned films.\nProvide me response in the json form of an array of strings with name 'films'."
 
 func main() {
 	lambda.Start(handleRequest)
@@ -66,11 +67,13 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			ResponseFormat: &openai.ChatCompletionResponseFormat{
 				Type: openai.ChatCompletionResponseFormatTypeJSONObject,
 			},
-			Model: openai.GPT4,
+			Model: openai.GPT4o,
 			Messages: []openai.ChatCompletionMessage{
 				{
-					Role:    openai.ChatMessageRoleAssistant,
-					Content: "You are an expert in film recommendations and an experienced cinema critique. You recommend films, do not ask questions, just generate film ideas, write only film names. I give you films I like and films I do not like. Also I give you films I do not want to see in your film recommendation list. Based on this, you will generate me film ideas.",
+					Role: openai.ChatMessageRoleSystem,
+					Content: "You are an expert in film recommendations and an experienced cinema critique designed to output JSON. " +
+						"You recommend films, do not ask questions, just generate film ideas, write only film names. I give you films I like and films I do not like. " +
+						"Also I give you films I do not want to see in your film recommendation list. Based on this, you will generate me film ideas.",
 				},
 				{
 					Role:    openai.ChatMessageRoleUser,
@@ -87,19 +90,21 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		}, err
 	}
 
-	var filmRecommendations []string
-	err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &filmRecommendations)
+	var filmRecommendationsObject FilmRecommendations
+	err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &filmRecommendationsObject)
 	if err != nil {
 		log.Println(resp.Choices[0].Message.Content)
-		log.Fatalf("Error while parsing ChatGPT response. Error message - %v", err)
+		log.Fatalf("Error while parsing ChatGPT response as an object. Error message - %v", err)
 		return events.APIGatewayProxyResponse{
 			StatusCode: 500,
 			Body:       "Error while parsing ChatGPT response: " + err.Error(),
 		}, err
 	}
-	log.Printf("Film recommendations: %v\n", filmRecommendations)
+	filmRecommendationsArray := filmRecommendationsObject.Films
 
-	films, err := tmdb.NormalizeFilms(filmRecommendations)
+	log.Printf("Film recommendations: %v\n", filmRecommendationsArray)
+
+	films, err := tmdb.NormalizeFilms(filmRecommendationsArray)
 	if err != nil {
 		log.Fatalf("Error while parsing ChatGPT response. Error message - %v", err)
 		return events.APIGatewayProxyResponse{
@@ -161,10 +166,14 @@ func constructMessageContent(result *dynamodb.GetItemOutput, filmCount string, f
 			messageContent = messageContent + "\nI do not like the following films: " + strings.Join(unlikedFilms, ", ") + "."
 		}
 
-		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ")
+		messageContent = messageContent + "\nExclude the following films: " + strings.Join(excludedFilms, ", ") + recommendationTemplateEnding
 	} else {
-		messageContent = recommendationTemplateBeginning
+		messageContent = recommendationTemplateBeginning + recommendationTemplateEnding
 	}
 
 	return strings.ReplaceAll(messageContent, "{filmCount}", filmCount)
+}
+
+type FilmRecommendations struct {
+	Films []string `json:"films"`
 }
