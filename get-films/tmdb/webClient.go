@@ -9,7 +9,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 )
 
 var movieSearchUrl = "https://api.themoviedb.org/3/search/movie?query={query}&include_adult=true&page=1&language=en-US&year={year}"
@@ -22,85 +21,33 @@ var tmdbToken = os.Getenv("TMDBReadToken")
 
 func NormalizeFilms(recommendedFilms []string) (string, error) {
 	var normalizedFilms []ResultRecommendedFilm
-	filmsChan := make(chan filmData, len(recommendedFilms))
 
 	for _, recommendedFilm := range recommendedFilms {
-		go func(film string) {
-			var data filmData
-			data.movieID, data.err = searchForMovie(film)
-			if data.err != nil {
-				filmsChan <- data
-				return
-			}
-
-			var wg sync.WaitGroup
-			wg.Add(3) // We are going to perform 3 concurrent operations
-
-			// Fetch movie details
-			go func() {
-				defer wg.Done()
-				data.movie, data.err = searchForMovieDetails(data.movieID)
-				if data.err != nil {
-					return
-				}
-			}()
-
-			// Fetch director names
-			go func() {
-				defer wg.Done()
-				data.directors, data.err = searchForDirector(data.movieID)
-				if data.err != nil {
-					return
-				}
-			}()
-
-			// Fetch images
-			go func() {
-				defer wg.Done()
-				data.images, data.err = getImages(data.movieID)
-				if data.err != nil {
-					return
-				}
-			}()
-
-			wg.Wait() // Wait for all concurrent operations to complete
-			filmsChan <- data
-		}(recommendedFilm)
-	}
-
-	for i := 0; i < len(recommendedFilms); i++ {
-		data := <-filmsChan
-		if data.err != nil {
-			return "", data.err
+		movieId, err := searchForMovie(recommendedFilm)
+		if err != nil {
+			return "", err
 		}
 
-		normalizedFilm := constructFilm(data.movie, data.directors, data.images, recommendedFilms[i])
-		normalizedFilms = append(normalizedFilms, normalizedFilm)
+		movieDetails, err := searchForMovieDetails(movieId)
+		if err != nil {
+			return "", err
+		}
+
+		directors, err := searchForDirector(movieId)
+		if err != nil {
+			return "", err
+		}
+
+		images, err := getImages(movieId)
+		if err != nil {
+			return "", err
+		}
+
+		normalizedFilms = constructFilmAndAppend(movieDetails, normalizedFilms, recommendedFilm, directors, images)
 	}
 
 	bytes, err := json.Marshal(normalizedFilms)
-	return string(bytes), err
-}
-
-func constructFilm(movie Movie, directors []string, images MovieImages, recommendedFilm string) ResultRecommendedFilm {
-	var genreNames []string
-	for _, genre := range movie.Genres {
-		genreNames = append(genreNames, genre.Name)
-	}
-
-	year := ""
-	if len(movie.ReleaseDate) >= 4 {
-		year = movie.ReleaseDate[:4]
-	}
-
-	return ResultRecommendedFilm{
-		Name:        recommendedFilm,
-		Year:        year,
-		Genres:      genreNames,
-		DirectedBy:  directors,
-		Description: movie.Overview,
-		MovieImages: images,
-	}
+	return string(bytes[:]), err
 }
 
 func searchForMovieDetails(movieId int) (Movie, error) {
@@ -308,12 +255,4 @@ type MovieImages struct {
 type FilmRecommendation struct {
 	FilmName string `json:"filmName"`
 	Year     string `json:"year"`
-}
-
-type filmData struct {
-	movieID   int
-	movie     Movie
-	directors []string
-	images    MovieImages
-	err       error
 }

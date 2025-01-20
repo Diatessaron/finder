@@ -39,38 +39,12 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		userUnlikedFilm = append(userUnlikedFilm, &dynamodb.AttributeValue{S: aws.String(film)})
 	}
 
-	result, err := db.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("user_films"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"id": {
-				S: aws.String(userId),
-			},
-		},
-	})
-	if err != nil {
-		log.Fatalf("Got error calling GetItem: %s", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: 500,
-			Body:       "Got error calling GetItem: " + err.Error(),
-		}, err
-	}
+	maxRetries := 3
+	return compareAndSetUpdate(maxRetries, userId, userLikedFilm, userUnlikedFilm)
+}
 
-	//create or update user liked/unliked films
-	var resultLikedFilms []*dynamodb.AttributeValue
-	var resultUnlikedFilms []*dynamodb.AttributeValue
-	oldLikedFilms := []*dynamodb.AttributeValue{}
-	oldUnlikedFilms := []*dynamodb.AttributeValue{}
-	if result.Item == nil {
-		resultLikedFilms = userLikedFilm
-		resultUnlikedFilms = userUnlikedFilm
-	} else {
-		resultLikedFilms = append(userLikedFilm, result.Item["likedFilms"].L...)
-		resultUnlikedFilms = append(userUnlikedFilm, result.Item["unlikedFilms"].L...)
-		oldLikedFilms = result.Item["likedFilms"].L
-		oldUnlikedFilms = result.Item["unlikedFilms"].L
-	}
-
-	_, err = db.UpdateItem(&dynamodb.UpdateItemInput{
+func performUpdate(oldLikedFilms []*dynamodb.AttributeValue, oldUnlikedFilms []*dynamodb.AttributeValue, resultLikedFilms []*dynamodb.AttributeValue, resultUnlikedFilms []*dynamodb.AttributeValue, userId string) error {
+	_, err := db.UpdateItem(&dynamodb.UpdateItemInput{
 		TableName: aws.String("user_films"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"id": {
@@ -96,17 +70,58 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 		},
 		ReturnValues: aws.String("UPDATED_NEW"),
 	})
-	if err != nil {
-		log.Fatalf("Got error calling PutItem: %s", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: 500,
-			Body:       "Got error calling PutItem: " + err.Error(),
-		}, err
+
+	return err
+}
+
+func compareAndSetUpdate(maxRetries int, userId string, userLikedFilm []*dynamodb.AttributeValue, userUnlikedFilm []*dynamodb.AttributeValue) (events.APIGatewayProxyResponse, error) {
+	for attempts := 0; attempts < maxRetries; attempts++ {
+		result, err := db.GetItem(&dynamodb.GetItemInput{
+			TableName: aws.String("user_films"),
+			Key: map[string]*dynamodb.AttributeValue{
+				"id": {
+					S: aws.String(userId),
+				},
+			},
+		})
+		if err != nil {
+			log.Fatalf("Got error calling GetItem: %s", err)
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "Got error calling GetItem: " + err.Error(),
+			}, err
+		}
+
+		//create or update user liked/unliked films
+		var resultLikedFilms []*dynamodb.AttributeValue
+		var resultUnlikedFilms []*dynamodb.AttributeValue
+		oldLikedFilms := []*dynamodb.AttributeValue{}
+		oldUnlikedFilms := []*dynamodb.AttributeValue{}
+		if result.Item == nil {
+			resultLikedFilms = userLikedFilm
+			resultUnlikedFilms = userUnlikedFilm
+		} else {
+			resultLikedFilms = append(userLikedFilm, result.Item["likedFilms"].L...)
+			resultUnlikedFilms = append(userUnlikedFilm, result.Item["unlikedFilms"].L...)
+			oldLikedFilms = result.Item["likedFilms"].L
+			oldUnlikedFilms = result.Item["unlikedFilms"].L
+		}
+
+		err = performUpdate(oldLikedFilms, oldUnlikedFilms, resultLikedFilms, resultUnlikedFilms, userId)
+
+		if err == nil {
+			break
+		} else if err != nil && attempts == maxRetries-1 {
+			log.Fatalf("Got error calling PutItem: %s", err)
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "Got error calling PutItem: " + err.Error(),
+			}, err
+		}
 	}
 
 	return events.APIGatewayProxyResponse{
-		StatusCode: 200,
-		Body:       "Success",
+		StatusCode: 204,
 	}, nil
 }
 
